@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>256-Key MIDI Tools</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0a0a0f;
+    --surface:  #13131c;
+    --panel:    #1a1a28;
+    --border:   #2a2a40;
+    --accent1:  #7c3aed;
+    --accent2:  #06b6d4;
+    --accent3:  #f59e0b;
+    --text:     #e8e8f0;
+    --muted:    #6b6b88;
+    --success:  #10b981;
+    --error:    #ef4444;
+    --key-w:    #dde0f0;
+    --key-b:    #1a1a28;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 60px;
+  }
+
+  /* Piano key decoration */
+  .piano-bar {
+    width: 100%;
+    max-width: 900px;
+    height: 36px;
+    display: flex;
+    border-radius: 0 0 6px 6px;
+    overflow: hidden;
+    margin-bottom: 48px;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .piano-bar .white-keys {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+  .wk {
+    flex: 1;
+    background: var(--key-w);
+    border-right: 1px solid #9098b8;
+    border-bottom: 2px solid #8890b0;
+  }
+  .bk-row {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 60%;
+    display: flex;
+    pointer-events: none;
+  }
+  .bk-spacer { flex: 1; }
+  .bk {
+    width: 2.5%;
+    background: var(--key-b);
+    border-radius: 0 0 3px 3px;
+    flex-shrink: 0;
+  }
+
+  header {
+    width: 100%;
+    max-width: 900px;
+    margin-bottom: 48px;
+    text-align: center;
+  }
+  header h1 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  header h1 span {
+    font-family: 'Space Mono', monospace;
+    color: var(--accent2);
+  }
+  header p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .tools-grid {
+    width: 100%;
+    max-width: 900px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  @media (max-width: 640px) {
+    .tools-grid { grid-template-columns: 1fr; }
+  }
+
+  .tool-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .tool-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .tool-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    flex-shrink: 0;
+  }
+  .tool-icon.dup  { background: rgba(124,58,237,0.18); border: 1px solid rgba(124,58,237,0.35); }
+  .tool-icon.str  { background: rgba(6,182,212,0.15);  border: 1px solid rgba(6,182,212,0.3); }
+
+  .tool-title { font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .tool-desc  { font-size: 0.82rem; color: var(--muted); line-height: 1.5; }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 8px;
+    padding: 24px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent1);
+    background: rgba(124,58,237,0.06);
+  }
+  .drop-zone.str-card:hover, .drop-zone.str-card.drag-over {
+    border-color: var(--accent2);
+    background: rgba(6,182,212,0.05);
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-label {
+    font-size: 0.82rem;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  .drop-label strong {
+    display: block;
+    font-size: 0.88rem;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .drop-label .fname {
+    color: var(--accent2);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    margin-top: 6px;
+    word-break: break-all;
+  }
+
+  /* Options */
+  .options { display: flex; flex-direction: column; gap: 10px; }
+  .opt-row { display: flex; align-items: center; gap: 10px; }
+  .opt-row label { font-size: 0.82rem; color: var(--muted); flex: 1; }
+  .opt-row select, .opt-row input[type=range] {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .opt-row input[type=range] { width: 90px; padding: 0; }
+  .range-val {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--accent3);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  /* Progress */
+  .progress-wrap { display: none; flex-direction: column; gap: 6px; }
+  .progress-wrap.visible { display: flex; }
+  .progress-bar-bg {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 2px;
+    transition: width 0.15s;
+  }
+  .fill-dup { background: var(--accent1); }
+  .fill-str { background: var(--accent2); }
+  .progress-label {
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* Button */
+  .btn {
+    width: 100%;
+    padding: 11px 16px;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:not(:disabled):active { transform: scale(0.98); }
+  .btn-dup { background: var(--accent1); color: #fff; }
+  .btn-str { background: var(--accent2); color: #0a0a0f; }
+
+  .log-line {
+    font-size: 0.75rem;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    min-height: 1.2em;
+    text-align: center;
+  }
+  .log-line.ok  { color: var(--success); }
+  .log-line.err { color: var(--error); }
+
+  footer {
+    margin-top: 52px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- Decorative piano bar -->
+<div class="piano-bar">
+  <div class="white-keys" id="wkRow"></div>
+  <div class="bk-row"    id="bkRow"></div>
+</div>
+
+<header>
+  <h1>256-Key <span>MIDI</span> Tools</h1>
+  <p>Two converters for expanding standard 128-key MIDIs to the full 256-key range</p>
+</header>
+
+<div class="tools-grid">
+
+  <!-- TOOL 1: Duplicator -->
+  <div class="tool-card">
+    <div class="tool-header">
+      <div class="tool-icon dup">⧉</div>
+      <div>
+        <div class="tool-title">Key Duplicator</div>
+        <div class="tool-desc">Duplicates the MIDI twice — copy 1 on keys 0–127, copy 2 on keys 128–255. Same art, side by side.</div>
+      </div>
+    </div>
+
+    <div class="drop-zone" id="dupDrop">
+      <input type="file" accept=".mid,.midi" id="dupFile">
+      <div class="drop-label">
+        <strong>Drop MIDI file here</strong>
+        or click to browse
+        <div class="fname" id="dupFname"></div>
+      </div>
+    </div>
+
+    <div class="progress-wrap" id="dupProgress">
+      <div class="progress-bar-bg"><div class="progress-bar-fill fill-dup" id="dupBar"></div></div>
+      <div class="progress-label" id="dupBarLabel">Reading…</div>
+    </div>
+
+    <button class="btn btn-dup" id="dupBtn" disabled>⧉ Duplicate to 256 keys</button>
+    <div class="log-line" id="dupLog"></div>
+  </div>
+
+  <!-- TOOL 2: Stretcher -->
+  <div class="tool-card">
+    <div class="tool-header">
+      <div class="tool-icon str">⇔</div>
+      <div>
+        <div class="tool-title">Key Stretcher</div>
+        <div class="tool-desc">Scales every note from 0–127 to 0–255 and fills gaps so the art is stretched across the full range.</div>
+      </div>
+    </div>
+
+    <div class="drop-zone str-card" id="strDrop">
+      <input type="file" accept=".mid,.midi" id="strFile">
+      <div class="drop-label">
+        <strong>Drop MIDI file here</strong>
+        or click to browse
+        <div class="fname" id="strFname"></div>
+      </div>
+    </div>
+
+    <div class="options">
+      <div class="opt-row">
+        <label>Fill width (keys around each note)</label>
+        <input type="range" id="fillWidth" min="0" max="3" step="1" value="1">
+        <span class="range-val" id="fillWidthVal">±1</span>
+      </div>
+    </div>
+
+    <div class="progress-wrap" id="strProgress">
+      <div class="progress-bar-bg"><div class="progress-bar-fill fill-str" id="strBar"></div></div>
+      <div class="progress-label" id="strBarLabel">Reading…</div>
+    </div>
+
+    <button class="btn btn-str" id="strBtn" disabled>⇔ Stretch to 256 keys</button>
+    <div class="log-line" id="strLog"></div>
+  </div>
+
+</div>
+
+<footer>Processes entirely in your browser — no file is uploaded anywhere</footer>
+
+<script>
+// ─── Piano bar decoration ───────────────────────────────────────────────────
+(function() {
+  const wkRow = document.getElementById('wkRow');
+  const bkRow = document.getElementById('bkRow');
+  const N = 52; // white keys visible
+  for (let i = 0; i < N; i++) {
+    const d = document.createElement('div');
+    d.className = 'wk';
+    wkRow.appendChild(d);
+  }
+  // approximate black key positions
+  const pattern = [0,0,1,0,1,0,0,1,0,1,0,1]; // C scale: 1=black after this white
+  let spacer = 0;
+  for (let i = 0; i < N; i++) {
+    const note = i % 7;
+    const hasBlack = [0,1,3,4,5].includes(note % 7); // C D F G A
+    const sp = document.createElement('div');
+    sp.className = 'bk-spacer';
+    sp.style.flex = '0.75';
+    bkRow.appendChild(sp);
+    if (hasBlack && i < N-1) {
+      const bk = document.createElement('div');
+      bk.className = 'bk';
+      bkRow.appendChild(bk);
+    }
+  }
+})();
+
+// ─── MIDI binary helpers ─────────────────────────────────────────────────────
+function readVLQ(buf, pos) {
+  let val = 0, bytes = 0;
+  while (true) {
+    const b = buf[pos++]; bytes++;
+    val = (val << 7) | (b & 0x7F);
+    if (!(b & 0x80)) break;
+  }
+  return { val, bytes };
+}
+
+function writeVLQ(val) {
+  if (val === 0) return [0];
+  const out = [];
+  let first = true;
+  for (let shift = 21; shift >= 0; shift -= 7) {
+    const chunk = (val >> shift) & 0x7F;
+    if (chunk || !first) {
+      out.push(first ? chunk : (chunk | 0x80));
+      // actually build MSB-first with continuation bits:
+      first = false;
+    }
+  }
+  // redo properly
+  const bytes2 = [];
+  let v = val;
+  bytes2.unshift(v & 0x7F); v >>= 7;
+  while (v > 0) { bytes2.unshift((v & 0x7F) | 0x80); v >>= 7; }
+  return bytes2;
+}
+
+function u32be(n) {
+  return [(n>>24)&0xFF,(n>>16)&0xFF,(n>>8)&0xFF,n&0xFF];
+}
+function u16be(n) { return [(n>>8)&0xFF, n&0xFF]; }
+function readU32(buf, pos) {
+  return ((buf[pos]<<24)|(buf[pos+1]<<16)|(buf[pos+2]<<8)|buf[pos+3]) >>> 0;
+}
+function readU16(buf, pos) { return (buf[pos]<<8)|buf[pos+1]; }
+
+// Parse MIDI into header + array of track Uint8Arrays
+function parseMidi(bytes) {
+  const buf = new Uint8Array(bytes);
+  if (buf[0]!==0x4D||buf[1]!==0x54||buf[2]!==0x68||buf[3]!==0x64)
+    throw new Error('Not a valid MIDI file');
+  const fmt    = readU16(buf, 8);
+  const ntracks= readU16(buf, 10);
+  const tpb    = readU16(buf, 12);
+  let pos = 14;
+  const tracks = [];
+  for (let t = 0; t < ntracks; t++) {
+    if (pos + 8 > buf.length) break;
+    const size = readU32(buf, pos+4);
+    tracks.push(buf.slice(pos+8, pos+8+size));
+    pos += 8 + size;
+  }
+  return { fmt, ntracks: tracks.length, tpb, tracks };
+}
+
+function buildMidi(fmt, tpb, tracks) {
+  const hdr = new Uint8Array([0x4D,0x54,0x68,0x64, 0,0,0,6,
+    ...u16be(fmt), ...u16be(tracks.length), ...u16be(tpb)]);
+  let total = hdr.length;
+  for (const t of tracks) total += 8 + t.length;
+  const out = new Uint8Array(total);
+  let off = 0;
+  out.set(hdr, off); off += hdr.length;
+  for (const t of tracks) {
+    const trkHdr = new Uint8Array([0x4D,0x54,0x72,0x6B, ...u32be(t.length)]);
+    out.set(trkHdr, off); off += 8;
+    out.set(t, off);      off += t.length;
+  }
+  return out;
+}
+
+// Growable byte buffer — avoids "Invalid array length" on huge tracks
+class GrowBuf {
+  constructor(initSize) {
+    this._buf = new Uint8Array(initSize || 65536);
+    this._len = 0;
+  }
+  _grow(need) {
+    if (this._len + need <= this._buf.length) return;
+    let newSize = this._buf.length;
+    while (newSize < this._len + need) newSize *= 2;
+    const nb = new Uint8Array(newSize);
+    nb.set(this._buf.subarray(0, this._len));
+    this._buf = nb;
+  }
+  writeByte(b) { this._grow(1); this._buf[this._len++] = b & 0xFF; }
+  writeBytes(arr) {
+    const n = arr.length;
+    this._grow(n);
+    for (let i = 0; i < n; i++) this._buf[this._len++] = arr[i] & 0xFF;
+  }
+  writeSlice(u8, start, end) {
+    const n = end - start;
+    this._grow(n);
+    this._buf.set(u8.subarray(start, end), this._len);
+    this._len += n;
+  }
+  result() { return this._buf.subarray(0, this._len); }
+}
+
+// Process a track, calling noteTransform(note) -> array of notes to emit (same tick)
+function processTrack(trackData, noteTransform) {
+  const buf = trackData;
+  const out = new GrowBuf(Math.max(65536, buf.length * 3));
+  let pos = 0;
+  let runningStatus = null;
+
+  while (pos < buf.length) {
+    // delta
+    const deltaStart = pos;
+    const { val: delta, bytes: db } = readVLQ(buf, pos);
+    pos += db;
+    if (pos >= buf.length) { out.writeSlice(buf, deltaStart, deltaStart+db); break; }
+
+    let status = buf[pos];
+    if (status & 0x80) { runningStatus = status; pos++; }
+    else { status = runningStatus; if (status==null) break; }
+
+    const msgType = status & 0xF0;
+
+    if (msgType === 0x80 || msgType === 0x90) {
+      const note = buf[pos++];
+      const vel  = buf[pos++];
+      const newNotes = noteTransform(note);
+      let first = true;
+      for (const nn of newNotes) {
+        if (first) { out.writeSlice(buf, deltaStart, deltaStart+db); first = false; }
+        else        { out.writeByte(0x00); }
+        out.writeByte(status);
+        out.writeByte(nn & 0xFF);
+        out.writeByte(vel);
+      }
+    } else if (msgType === 0xA0 || msgType === 0xB0 || msgType === 0xE0) {
+      out.writeSlice(buf, deltaStart, deltaStart+db);
+      out.writeByte(status); out.writeByte(buf[pos++]); out.writeByte(buf[pos++]);
+    } else if (msgType === 0xC0 || msgType === 0xD0) {
+      out.writeSlice(buf, deltaStart, deltaStart+db);
+      out.writeByte(status); out.writeByte(buf[pos++]);
+    } else if (status === 0xFF) {
+      const metaType = buf[pos++];
+      const metaLenStart = pos;
+      const { val: mlen, bytes: mlb } = readVLQ(buf, pos); pos += mlb;
+      out.writeSlice(buf, deltaStart, deltaStart+db);
+      out.writeByte(0xFF); out.writeByte(metaType);
+      out.writeSlice(buf, metaLenStart, metaLenStart+mlb);
+      out.writeSlice(buf, pos, pos+mlen); pos += mlen;
+    } else if (status === 0xF0 || status === 0xF7) {
+      const sysexLenStart = pos;
+      const { val: slen, bytes: slb } = readVLQ(buf, pos); pos += slb;
+      out.writeSlice(buf, deltaStart, deltaStart+db);
+      out.writeByte(status);
+      out.writeSlice(buf, sysexLenStart, sysexLenStart+slb);
+      out.writeSlice(buf, pos, pos+slen); pos += slen;
+    } else {
+      out.writeSlice(buf, deltaStart, deltaStart+db);
+      out.writeSlice(buf, pos, buf.length);
+      break;
+    }
+  }
+  return out.result();
+}
+
+function download(bytes, filename) {
+  const blob = new Blob([bytes], { type: 'audio/midi' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function basename(name) {
+  return name.replace(/\.[^.]+$/, '');
+}
+
+function setProgress(barEl, labelEl, wrapEl, pct, label) {
+  wrapEl.classList.add('visible');
+  barEl.style.width = pct + '%';
+  labelEl.textContent = label;
+}
+
+// ─── Tool 1: Duplicator ──────────────────────────────────────────────────────
+let dupMidi = null, dupFileName = '';
+
+document.getElementById('dupFile').addEventListener('change', function() {
+  if (!this.files[0]) return;
+  dupFileName = this.files[0].name;
+  document.getElementById('dupFname').textContent = dupFileName;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      dupMidi = parseMidi(e.target.result);
+      document.getElementById('dupBtn').disabled = false;
+      document.getElementById('dupLog').textContent = `${dupMidi.tracks.length} tracks loaded`;
+      document.getElementById('dupLog').className = 'log-line ok';
+    } catch(err) {
+      document.getElementById('dupLog').textContent = err.message;
+      document.getElementById('dupLog').className = 'log-line err';
+    }
+  };
+  reader.readAsArrayBuffer(this.files[0]);
+});
+
+['dragover','dragleave','drop'].forEach(evt => {
+  document.getElementById('dupDrop').addEventListener(evt, e => {
+    e.preventDefault();
+    if (evt === 'dragover') e.currentTarget.classList.add('drag-over');
+    else e.currentTarget.classList.remove('drag-over');
+    if (evt === 'drop' && e.dataTransfer.files[0]) {
+      document.getElementById('dupFile').files = e.dataTransfer.files;
+      document.getElementById('dupFile').dispatchEvent(new Event('change'));
+    }
+  });
+});
+
+document.getElementById('dupBtn').addEventListener('click', async () => {
+  if (!dupMidi) return;
+  const btn = document.getElementById('dupBtn');
+  btn.disabled = true;
+  const bar   = document.getElementById('dupBar');
+  const label = document.getElementById('dupBarLabel');
+  const wrap  = document.getElementById('dupProgress');
+  const log   = document.getElementById('dupLog');
+
+  try {
+    setProgress(bar, label, wrap, 5, 'Preparing…');
+    await new Promise(r => setTimeout(r, 10));
+
+    const { fmt, tpb, tracks } = dupMidi;
+    const newTracks = [tracks[0]]; // keep tempo track
+    const dataTracks = tracks.slice(1);
+    const total = dataTracks.length * 2;
+    let done = 0;
+
+    // Copy 1: keys 0-127, identity
+    for (const t of dataTracks) {
+      newTracks.push(t);
+      done++;
+      if (done % 50 === 0) {
+        setProgress(bar, label, wrap, 5 + (done/total)*85, `Copy 1: ${done}/${dataTracks.length} tracks…`);
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    // Copy 2: +128, no clamp
+    for (const t of dataTracks) {
+      const shifted = processTrack(t, note => [note + 128]);
+      newTracks.push(shifted);
+      done++;
+      if (done % 50 === 0) {
+        setProgress(bar, label, wrap, 5 + (done/total)*85, `Copy 2: ${done - dataTracks.length}/${dataTracks.length} tracks…`);
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    setProgress(bar, label, wrap, 95, 'Building file…');
+    await new Promise(r => setTimeout(r, 10));
+    const out = buildMidi(fmt, tpb, newTracks);
+    setProgress(bar, label, wrap, 100, 'Done!');
+    download(out, basename(dupFileName) + '_256dup.mid');
+    log.textContent = `✓ ${newTracks.length} tracks, ${(out.length/1024/1024).toFixed(1)} MB`;
+    log.className = 'log-line ok';
+  } catch(err) {
+    log.textContent = '✗ ' + err.message;
+    log.className = 'log-line err';
+  }
+  btn.disabled = false;
+});
+
+// ─── Tool 2: Stretcher ───────────────────────────────────────────────────────
+let strMidi = null, strFileName = '';
+
+document.getElementById('strFile').addEventListener('change', function() {
+  if (!this.files[0]) return;
+  strFileName = this.files[0].name;
+  document.getElementById('strFname').textContent = strFileName;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      strMidi = parseMidi(e.target.result);
+      document.getElementById('strBtn').disabled = false;
+      document.getElementById('strLog').textContent = `${strMidi.tracks.length} tracks loaded`;
+      document.getElementById('strLog').className = 'log-line ok';
+    } catch(err) {
+      document.getElementById('strLog').textContent = err.message;
+      document.getElementById('strLog').className = 'log-line err';
+    }
+  };
+  reader.readAsArrayBuffer(this.files[0]);
+});
+
+['dragover','dragleave','drop'].forEach(evt => {
+  document.getElementById('strDrop').addEventListener(evt, e => {
+    e.preventDefault();
+    if (evt === 'dragover') e.currentTarget.classList.add('drag-over');
+    else e.currentTarget.classList.remove('drag-over');
+    if (evt === 'drop' && e.dataTransfer.files[0]) {
+      document.getElementById('strFile').files = e.dataTransfer.files;
+      document.getElementById('strFile').dispatchEvent(new Event('change'));
+    }
+  });
+});
+
+const fillSlider = document.getElementById('fillWidth');
+const fillVal    = document.getElementById('fillWidthVal');
+fillSlider.addEventListener('input', () => {
+  const v = parseInt(fillSlider.value);
+  fillVal.textContent = v === 0 ? '0' : `±${v}`;
+});
+
+document.getElementById('strBtn').addEventListener('click', async () => {
+  if (!strMidi) return;
+  const btn   = document.getElementById('strBtn');
+  btn.disabled = true;
+  const bar   = document.getElementById('strBar');
+  const label = document.getElementById('strBarLabel');
+  const wrap  = document.getElementById('strProgress');
+  const log   = document.getElementById('strLog');
+  const fill  = parseInt(fillSlider.value);
+
+  try {
+    setProgress(bar, label, wrap, 5, 'Preparing…');
+    await new Promise(r => setTimeout(r, 10));
+
+    const { fmt, tpb, tracks } = strMidi;
+    const newTracks = [tracks[0]];
+    const dataTracks = tracks.slice(1);
+
+    const transform = note => {
+      const scaled = Math.round(note * 255 / 127);
+      if (fill === 0) return [scaled];
+      const set = new Set();
+      for (let d = -fill; d <= fill; d++) {
+        const n = scaled + d;
+        if (n >= 0 && n <= 255) set.add(n);
+      }
+      return Array.from(set).sort((a,b)=>a-b);
+    };
+
+    for (let i = 0; i < dataTracks.length; i++) {
+      const stretched = processTrack(dataTracks[i], transform);
+      newTracks.push(stretched);
+      if ((i+1) % 50 === 0) {
+        setProgress(bar, label, wrap, 5 + ((i+1)/dataTracks.length)*88, `${i+1}/${dataTracks.length} tracks…`);
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    setProgress(bar, label, wrap, 95, 'Building file…');
+    await new Promise(r => setTimeout(r, 10));
+    const out = buildMidi(fmt, tpb, newTracks);
+    setProgress(bar, label, wrap, 100, 'Done!');
+    download(out, basename(strFileName) + '_256stretch.mid');
+    log.textContent = `✓ ${newTracks.length} tracks, ${(out.length/1024/1024).toFixed(1)} MB`;
+    log.className = 'log-line ok';
+  } catch(err) {
+    log.textContent = '✗ ' + err.message;
+    log.className = 'log-line err';
+  }
+  btn.disabled = false;
+});
+</script>
+</body>
+</html>
